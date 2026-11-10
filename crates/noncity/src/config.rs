@@ -21,6 +21,11 @@ pub struct Config {
     pub default_server: String,
     pub forwarding_mode: ForwardingMode,
     pub forwarding_secret: String,
+    pub tablist_header: String,
+    pub tablist_footer: String,
+    pub rate_limit_burst: f64,
+    pub rate_limit_refill: f64,
+    pub max_connections_per_ip: usize,
     pub servers: HashMap<String, SocketAddr>,
 }
 
@@ -38,6 +43,11 @@ impl Default for Config {
             default_server: "lobby".to_string(),
             forwarding_mode: ForwardingMode::Velocity,
             forwarding_secret: "change_me_to_a_secure_random_secret".to_string(),
+            tablist_header: "§b§lNONCITY PROXY\n§7play.example.com".to_string(),
+            tablist_footer: "\n§7High Performance Minecraft Proxy (Tokio Core)".to_string(),
+            rate_limit_burst: 20.0,
+            rate_limit_refill: 5.0,
+            max_connections_per_ip: 5,
             servers,
         }
     }

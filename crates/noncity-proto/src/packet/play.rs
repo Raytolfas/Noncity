@@ -1,5 +1,6 @@
 use crate::error::ProtoError;
 use crate::io::{read_string, write_string, PacketRead, PacketWrite};
+use crate::varint::VarInt;
 use bytes::{Buf, BufMut};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +29,61 @@ impl PacketWrite for SystemChatPacket {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabListHeaderFooter {
+    pub header: String,
+    pub footer: String,
+}
+
+impl PacketRead for TabListHeaderFooter {
+    fn read(buf: &mut impl Buf) -> Result<Self, ProtoError> {
+        let header = read_string(buf, 262144)?;
+        let footer = read_string(buf, 262144)?;
+        Ok(Self { header, footer })
+    }
+}
+
+impl PacketWrite for TabListHeaderFooter {
+    fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
+        write_string(buf, &self.header);
+        write_string(buf, &self.footer);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandSuggestionMatch {
+    pub value: String,
+    pub tooltip: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandSuggestionsResponse {
+    pub transaction_id: VarInt,
+    pub start: VarInt,
+    pub length: VarInt,
+    pub matches: Vec<CommandSuggestionMatch>,
+}
+
+impl PacketWrite for CommandSuggestionsResponse {
+    fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
+        self.transaction_id.encode(buf);
+        self.start.encode(buf);
+        self.length.encode(buf);
+        VarInt(self.matches.len() as i32).encode(buf);
+        for m in &self.matches {
+            write_string(buf, &m.value);
+            if let Some(tip) = &m.tooltip {
+                buf.put_u8(1);
+                write_string(buf, tip);
+            } else {
+                buf.put_u8(0);
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn system_chat_packet_id(protocol_version: i32) -> i32 {
     if protocol_version >= 766 {
         0x6B
@@ -41,5 +97,33 @@ pub fn system_chat_packet_id(protocol_version: i32) -> i32 {
         0x5F
     } else {
         0x0F
+    }
+}
+
+pub fn tablist_packet_id(protocol_version: i32) -> i32 {
+    if protocol_version >= 766 {
+        0x6E
+    } else if protocol_version >= 764 {
+        0x6C
+    } else if protocol_version >= 763 {
+        0x6A
+    } else if protocol_version >= 761 {
+        0x63
+    } else if protocol_version >= 759 {
+        0x62
+    } else {
+        0x54
+    }
+}
+
+pub fn command_suggestions_packet_id(protocol_version: i32) -> i32 {
+    if protocol_version >= 766 {
+        0x11
+    } else if protocol_version >= 764 {
+        0x10
+    } else if protocol_version >= 761 {
+        0x0F
+    } else {
+        0x0E
     }
 }

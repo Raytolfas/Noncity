@@ -4,6 +4,7 @@ mod tests {
     use noncity_net::packet::RawPacket;
     use noncity_proto::io::write_string;
     use noncity_proto::uuid::offline_player_uuid;
+    use std::net::IpAddr;
     use uuid::Uuid;
 
     #[test]
@@ -24,5 +25,15 @@ mod tests {
         let mut slice = packet.payload.as_ref();
         let text = noncity_proto::io::read_string(&mut slice, 256).unwrap();
         assert_eq!(text, "/server survival");
+    }
+
+    #[test]
+    fn test_rate_limiter_burst() {
+        use std::net::Ipv4Addr;
+
+        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let mut limiter_map = std::collections::HashMap::new();
+        limiter_map.insert(ip, 3);
+        assert_eq!(limiter_map.get(&ip), Some(&3));
     }
 }

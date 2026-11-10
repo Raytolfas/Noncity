@@ -1,14 +1,18 @@
 use crate::auth::{compute_server_hash, AuthManager, MojangProfileProperty};
-use crate::command::{extract_proxy_command, make_chat_json, ProxyCommand};
+use crate::command::{extract_proxy_command, handle_tab_complete, make_chat_json, ProxyCommand};
 use crate::config::{Config, ForwardingMode};
 use crate::forwarding::{create_velocity_forwarding_data, VELOCITY_FORWARDING_CHANNEL};
+use crate::plugin::PluginManager;
 use noncity_net::Connection;
 use noncity_proto::packet::handshake::{HandshakeNextState, HandshakePacket};
 use noncity_proto::packet::login::{
     EncryptionRequest, EncryptionResponse, LoginDisconnect, LoginPluginRequest,
     LoginPluginResponse, LoginStart, LoginSuccess, SetCompression,
 };
-use noncity_proto::packet::play::{system_chat_packet_id, SystemChatPacket};
+use noncity_proto::packet::play::{
+    command_suggestions_packet_id, system_chat_packet_id, tablist_packet_id, SystemChatPacket,
+    TabListHeaderFooter,
+};
 use noncity_proto::packet::status::{
     PingPacket, ServerStatus, StatusDescription, StatusPlayers, StatusRequest, StatusResponse,
     StatusVersion,
@@ -26,6 +30,7 @@ pub struct Session {
     client: Connection,
     config: Arc<Config>,
     auth: Arc<AuthManager>,
+    plugins: Arc<PluginManager>,
     online_players: Arc<AtomicI32>,
     state: State,
     protocol_version: i32,
@@ -40,12 +45,14 @@ impl Session {
         client: Connection,
         config: Arc<Config>,
         auth: Arc<AuthManager>,
+        plugins: Arc<PluginManager>,
         online_players: Arc<AtomicI32>,
     ) -> Self {
         Self {
             client,
             config,
             auth,
+            plugins,
             online_players,
             state: State::Handshake,
             protocol_version: 0,
@@ -143,6 +150,16 @@ impl Session {
         let login_start: LoginStart = raw_login_start.deserialize()?;
         self.player_name = login_start.username.clone();
 
+        let client_ip = self.client.peer_addr().ip().to_string();
+        if !self.plugins.on_player_login(&self.player_name, &client_ip) {
+            let disconnect = LoginDisconnect {
+                reason: r#"{"text":"§cConnection denied by Noncity plugin"}"#.to_string(),
+            };
+            let _ = self.client.write(0x00, &disconnect).await;
+            let _ = self.client.flush().await;
+            anyhow::bail!("login rejected by plugin");
+        }
+
         if self.config.online_mode {
             let verify_token = self.auth.generate_verify_token();
             let enc_request = EncryptionRequest {
@@ -233,6 +250,8 @@ impl Session {
             backend.flush().await?;
         }
 
+        self.send_tablist_header_footer().await?;
+
         self.online_players.fetch_add(1, Ordering::Relaxed);
         info!(player = %self.player_name, server = %self.current_server, "player joined proxy");
 
@@ -241,6 +260,17 @@ impl Session {
 
         info!(player = %self.player_name, "player disconnected");
         pipe_res
+    }
+
+    async fn send_tablist_header_footer(&mut self) -> anyhow::Result<()> {
+        let packet_id = tablist_packet_id(self.protocol_version);
+        let tab = TabListHeaderFooter {
+            header: make_chat_json(&self.config.tablist_header),
+            footer: make_chat_json(&self.config.tablist_footer),
+        };
+        let _ = self.client.write(packet_id, &tab).await;
+        let _ = self.client.flush().await;
+        Ok(())
     }
 
     async fn connect_backend(
@@ -347,10 +377,20 @@ impl Session {
         backend: &mut Connection,
         client_handshake: &HandshakePacket,
     ) -> anyhow::Result<()> {
+        let server_names: Vec<String> = self.config.servers.keys().cloned().collect();
+
         loop {
             tokio::select! {
                 client_res = self.client.read_packet() => {
                     let packet = client_res?;
+
+                    if let Some(tab_resp) = handle_tab_complete(&packet, &server_names) {
+                        let packet_id = command_suggestions_packet_id(self.protocol_version);
+                        let _ = self.client.write(packet_id, &tab_resp).await;
+                        let _ = self.client.flush().await;
+                        continue;
+                    }
+
                     if let Some(cmd) = extract_proxy_command(&packet) {
                         match cmd {
                             ProxyCommand::Server(None) => {
@@ -381,6 +421,7 @@ impl Session {
                                                 *backend = new_backend;
                                                 self.current_server = target.clone();
                                                 let _ = self.send_chat_message(&format!("§aSuccessfully connected to '{}'!", target)).await;
+                                                let _ = self.send_tablist_header_footer().await;
                                                 continue;
                                             }
                                             Err(err) => {
@@ -405,6 +446,12 @@ impl Session {
                                 let msg = "§bNoncity §7v0.1.0 - High performance Rust Minecraft proxy (tokio core)";
                                 let _ = self.send_chat_message(msg).await;
                                 continue;
+                            }
+                            ProxyCommand::PluginCustom(ref full_cmd) => {
+                                if let Some(reply) = self.plugins.on_command(&self.player_name, full_cmd) {
+                                    let _ = self.send_chat_message(&reply).await;
+                                    continue;
+                                }
                             }
                         }
                     }

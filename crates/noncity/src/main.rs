@@ -2,6 +2,8 @@ mod auth;
 mod command;
 mod config;
 mod forwarding;
+mod limiter;
+mod plugin;
 mod server;
 mod session;
 
