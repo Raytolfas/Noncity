@@ -1,3 +1,4 @@
+use crate::auth::MojangProfileProperty;
 use bytes::Bytes;
 use hmac::{Hmac, Mac};
 use noncity_proto::io::{write_string, write_uuid};
@@ -16,6 +17,7 @@ pub fn create_velocity_forwarding_data(
     remote_addr: SocketAddr,
     player_uuid: Uuid,
     player_name: &str,
+    properties: &[MojangProfileProperty],
 ) -> anyhow::Result<Bytes> {
     let mut payload = Vec::new();
 
@@ -23,7 +25,18 @@ pub fn create_velocity_forwarding_data(
     write_string(&mut payload, &remote_addr.ip().to_string());
     write_uuid(&mut payload, &player_uuid);
     write_string(&mut payload, player_name);
-    VarInt(0).encode(&mut payload);
+
+    VarInt(properties.len() as i32).encode(&mut payload);
+    for prop in properties {
+        write_string(&mut payload, &prop.name);
+        write_string(&mut payload, &prop.value);
+        if let Some(sig) = &prop.signature {
+            payload.push(1);
+            write_string(&mut payload, sig);
+        } else {
+            payload.push(0);
+        }
+    }
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
     mac.update(&payload);

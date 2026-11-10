@@ -44,6 +44,107 @@ impl PacketWrite for LoginStart {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncryptionRequest {
+    pub server_id: String,
+    pub public_key: Vec<u8>,
+    pub verify_token: Vec<u8>,
+}
+
+impl PacketRead for EncryptionRequest {
+    fn read(buf: &mut impl Buf) -> Result<Self, ProtoError> {
+        let server_id = read_string(buf, 20)?;
+        let pk_len = VarInt::decode(buf)?.0 as usize;
+        if buf.remaining() < pk_len {
+            return Err(ProtoError::Underflow);
+        }
+        let mut public_key = vec![0u8; pk_len];
+        buf.copy_to_slice(&mut public_key);
+
+        let vt_len = VarInt::decode(buf)?.0 as usize;
+        if buf.remaining() < vt_len {
+            return Err(ProtoError::Underflow);
+        }
+        let mut verify_token = vec![0u8; vt_len];
+        buf.copy_to_slice(&mut verify_token);
+
+        Ok(Self {
+            server_id,
+            public_key,
+            verify_token,
+        })
+    }
+}
+
+impl PacketWrite for EncryptionRequest {
+    fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
+        write_string(buf, &self.server_id);
+        VarInt(self.public_key.len() as i32).encode(buf);
+        buf.put_slice(&self.public_key);
+        VarInt(self.verify_token.len() as i32).encode(buf);
+        buf.put_slice(&self.verify_token);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncryptionResponse {
+    pub shared_secret: Vec<u8>,
+    pub verify_token: Vec<u8>,
+}
+
+impl PacketRead for EncryptionResponse {
+    fn read(buf: &mut impl Buf) -> Result<Self, ProtoError> {
+        let ss_len = VarInt::decode(buf)?.0 as usize;
+        if buf.remaining() < ss_len {
+            return Err(ProtoError::Underflow);
+        }
+        let mut shared_secret = vec![0u8; ss_len];
+        buf.copy_to_slice(&mut shared_secret);
+
+        let vt_len = VarInt::decode(buf)?.0 as usize;
+        if buf.remaining() < vt_len {
+            return Err(ProtoError::Underflow);
+        }
+        let mut verify_token = vec![0u8; vt_len];
+        buf.copy_to_slice(&mut verify_token);
+
+        Ok(Self {
+            shared_secret,
+            verify_token,
+        })
+    }
+}
+
+impl PacketWrite for EncryptionResponse {
+    fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
+        VarInt(self.shared_secret.len() as i32).encode(buf);
+        buf.put_slice(&self.shared_secret);
+        VarInt(self.verify_token.len() as i32).encode(buf);
+        buf.put_slice(&self.verify_token);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetCompression {
+    pub threshold: VarInt,
+}
+
+impl PacketRead for SetCompression {
+    fn read(buf: &mut impl Buf) -> Result<Self, ProtoError> {
+        let threshold = VarInt::decode(buf)?;
+        Ok(Self { threshold })
+    }
+}
+
+impl PacketWrite for SetCompression {
+    fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
+        self.threshold.encode(buf);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoginSuccess {
     pub uuid: Uuid,
     pub username: String,

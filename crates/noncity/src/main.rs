@@ -1,3 +1,5 @@
+mod auth;
+mod command;
 mod config;
 mod forwarding;
 mod server;
@@ -18,6 +20,6 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::load_or_create("config.toml").await?;
-    let server = Server::new(config);
+    let server = Server::new(config)?;
     server.run().await
 }

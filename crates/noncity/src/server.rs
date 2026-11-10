@@ -1,3 +1,4 @@
+use crate::auth::AuthManager;
 use crate::config::Config;
 use crate::session::Session;
 use noncity_net::Connection;
@@ -8,15 +9,18 @@ use tracing::{error, info};
 
 pub struct Server {
     config: Arc<Config>,
+    auth: Arc<AuthManager>,
     online_players: Arc<AtomicI32>,
 }
 
 impl Server {
-    pub fn new(config: Config) -> Self {
-        Self {
+    pub fn new(config: Config) -> anyhow::Result<Self> {
+        let auth = AuthManager::new()?;
+        Ok(Self {
             config: Arc::new(config),
+            auth: Arc::new(auth),
             online_players: Arc::new(AtomicI32::new(0)),
-        }
+        })
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
@@ -28,8 +32,12 @@ impl Server {
                 Ok((stream, peer_addr)) => {
                     let _ = stream.set_nodelay(true);
                     let conn = Connection::new(stream, peer_addr);
-                    let session =
-                        Session::new(conn, Arc::clone(&self.config), Arc::clone(&self.online_players));
+                    let session = Session::new(
+                        conn,
+                        Arc::clone(&self.config),
+                        Arc::clone(&self.auth),
+                        Arc::clone(&self.online_players),
+                    );
 
                     tokio::spawn(async move {
                         session.run().await;

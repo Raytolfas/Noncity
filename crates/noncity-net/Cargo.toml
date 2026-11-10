@@ -11,3 +11,7 @@ futures-util = { version = "0.3", features = ["sink"] }
 bytes = "1.9"
 thiserror = "2.0"
 tracing = "0.1"
+flate2 = "1.0"
+aes = "0.8"
+cfb8 = "0.8"
+pin-project-lite = "0.2"
