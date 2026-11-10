@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/noncity-proto",
+    "crates/noncity-net",
+    "crates/noncity",
+]
+resolver = "2"

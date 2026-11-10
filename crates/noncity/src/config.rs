@@ -1,0 +1,56 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::path::Path;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ForwardingMode {
+    None,
+    Legacy,
+    Velocity,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub bind: SocketAddr,
+    pub motd: String,
+    pub max_players: i32,
+    pub default_server: String,
+    pub forwarding_mode: ForwardingMode,
+    pub forwarding_secret: String,
+    pub servers: HashMap<String, SocketAddr>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        let mut servers = HashMap::new();
+        servers.insert("lobby".to_string(), "127.0.0.1:25566".parse().unwrap());
+
+        Self {
+            bind: "0.0.0.0:25565".parse().unwrap(),
+            motd: "§bNoncity §7- High performance Minecraft proxy".to_string(),
+            max_players: 1000,
+            default_server: "lobby".to_string(),
+            forwarding_mode: ForwardingMode::Velocity,
+            forwarding_secret: "change_me_to_a_secure_random_secret".to_string(),
+            servers,
+        }
+    }
+}
+
+impl Config {
+    pub async fn load_or_create<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
+        let p = path.as_ref();
+        if p.exists() {
+            let content = tokio::fs::read_to_string(p).await?;
+            let cfg: Config = toml::from_str(&content)?;
+            Ok(cfg)
+        } else {
+            let cfg = Config::default();
+            let content = toml::to_string_pretty(&cfg)?;
+            tokio::fs::write(p, content).await?;
+            Ok(cfg)
+        }
+    }
+}
