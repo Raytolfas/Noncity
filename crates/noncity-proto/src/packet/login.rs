@@ -48,6 +48,7 @@ pub struct EncryptionRequest {
     pub server_id: String,
     pub public_key: Vec<u8>,
     pub verify_token: Vec<u8>,
+    pub should_authenticate: Option<bool>,
 }
 
 impl PacketRead for EncryptionRequest {
@@ -67,10 +68,17 @@ impl PacketRead for EncryptionRequest {
         let mut verify_token = vec![0u8; vt_len];
         buf.copy_to_slice(&mut verify_token);
 
+        let should_authenticate = if buf.remaining() > 0 {
+            Some(buf.get_u8() != 0)
+        } else {
+            None
+        };
+
         Ok(Self {
             server_id,
             public_key,
             verify_token,
+            should_authenticate,
         })
     }
 }
@@ -82,6 +90,9 @@ impl PacketWrite for EncryptionRequest {
         buf.put_slice(&self.public_key);
         VarInt(self.verify_token.len() as i32).encode(buf);
         buf.put_slice(&self.verify_token);
+        if let Some(auth) = self.should_authenticate {
+            buf.put_u8(u8::from(auth));
+        }
         Ok(())
     }
 }

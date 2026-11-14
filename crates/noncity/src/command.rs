@@ -11,7 +11,39 @@ pub enum ProxyCommand {
     PluginCustom(String),
 }
 
-pub fn extract_proxy_command(packet: &RawPacket) -> Option<ProxyCommand> {
+pub fn is_chat_command_packet(packet_id: i32, protocol_version: i32) -> bool {
+    if protocol_version >= 766 {
+        packet_id == 0x04 || packet_id == 0x05
+    } else if protocol_version >= 761 {
+        packet_id == 0x03 || packet_id == 0x04
+    } else if protocol_version >= 759 {
+        packet_id == 0x04 || packet_id == 0x05
+    } else {
+        packet_id == 0x03 || packet_id == 0x02 || packet_id == 0x01
+    }
+}
+
+pub fn is_tab_complete_packet(packet_id: i32, protocol_version: i32) -> bool {
+    if protocol_version >= 766 {
+        packet_id == 0x09
+    } else if protocol_version >= 761 {
+        packet_id == 0x08
+    } else if protocol_version >= 759 {
+        packet_id == 0x08
+    } else if protocol_version >= 477 {
+        packet_id == 0x06
+    } else if protocol_version >= 393 {
+        packet_id == 0x05
+    } else {
+        packet_id == 0x01 || packet_id == 0x14
+    }
+}
+
+pub fn extract_proxy_command(packet: &RawPacket, protocol_version: i32) -> Option<ProxyCommand> {
+    if !is_chat_command_packet(packet.id, protocol_version) {
+        return None;
+    }
+
     let mut slice = packet.payload.as_ref();
     let text = read_string(&mut slice, 256).ok()?;
 
@@ -33,7 +65,12 @@ pub fn extract_proxy_command(packet: &RawPacket) -> Option<ProxyCommand> {
 pub fn handle_tab_complete(
     packet: &RawPacket,
     server_names: &[String],
+    protocol_version: i32,
 ) -> Option<CommandSuggestionsResponse> {
+    if !is_tab_complete_packet(packet.id, protocol_version) {
+        return None;
+    }
+
     let mut slice = packet.payload.as_ref();
     let transaction_id = VarInt::decode(&mut slice).ok()?;
     let text = read_string(&mut slice, 256).ok()?;

@@ -3,15 +3,14 @@ use crate::command::{extract_proxy_command, handle_tab_complete, make_chat_json,
 use crate::config::{Config, ForwardingMode};
 use crate::forwarding::{create_velocity_forwarding_data, VELOCITY_FORWARDING_CHANNEL};
 use crate::plugin::PluginManager;
-use noncity_net::Connection;
+use noncity_net::{Connection, RawPacket};
 use noncity_proto::packet::handshake::{HandshakeNextState, HandshakePacket};
 use noncity_proto::packet::login::{
     EncryptionRequest, EncryptionResponse, LoginDisconnect, LoginPluginRequest,
-    LoginPluginResponse, LoginStart, LoginSuccess, SetCompression,
+    LoginPluginResponse, LoginStart, SetCompression,
 };
 use noncity_proto::packet::play::{
-    command_suggestions_packet_id, system_chat_packet_id, tablist_packet_id, SystemChatPacket,
-    TabListHeaderFooter,
+    command_suggestions_packet_id, system_chat_packet_id, SystemChatPacket,
 };
 use noncity_proto::packet::status::{
     PingPacket, ServerStatus, StatusDescription, StatusPlayers, StatusRequest, StatusResponse,
@@ -121,7 +120,7 @@ impl Session {
             description: StatusDescription {
                 text: self.config.motd.clone(),
             },
-            favicon: None,
+            favicon: Some("data:image/png;base64,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".to_string()),
             enforces_secure_chat: Some(false),
         };
 
@@ -162,10 +161,16 @@ impl Session {
 
         if self.config.online_mode {
             let verify_token = self.auth.generate_verify_token();
+            let should_authenticate = if self.protocol_version >= 766 {
+                Some(true)
+            } else {
+                None
+            };
             let enc_request = EncryptionRequest {
                 server_id: "".to_string(),
                 public_key: self.auth.public_key_der().to_vec(),
                 verify_token: verify_token.to_vec(),
+                should_authenticate,
             };
             self.client.write(0x01, &enc_request).await?;
             self.client.flush().await?;
@@ -234,14 +239,10 @@ impl Session {
             }
         };
 
-        self.login_success_backend(&mut backend).await?;
+        let login_success_pkt = self.login_success_backend(&mut backend).await?;
         self.current_server = default_target;
 
-        let login_success = LoginSuccess {
-            uuid: self.player_uuid,
-            username: self.player_name.clone(),
-        };
-        self.client.write(0x02, &login_success).await?;
+        self.client.write_packet(login_success_pkt).await?;
         self.client.flush().await?;
 
         if self.protocol_version >= 764 {
@@ -249,8 +250,6 @@ impl Session {
             backend.write_packet(ack).await?;
             backend.flush().await?;
         }
-
-        self.send_tablist_header_footer().await?;
 
         self.online_players.fetch_add(1, Ordering::Relaxed);
         info!(player = %self.player_name, server = %self.current_server, "player joined proxy");
@@ -260,17 +259,6 @@ impl Session {
 
         info!(player = %self.player_name, "player disconnected");
         pipe_res
-    }
-
-    async fn send_tablist_header_footer(&mut self) -> anyhow::Result<()> {
-        let packet_id = tablist_packet_id(self.protocol_version);
-        let tab = TabListHeaderFooter {
-            header: make_chat_json(&self.config.tablist_header),
-            footer: make_chat_json(&self.config.tablist_footer),
-        };
-        let _ = self.client.write(packet_id, &tab).await;
-        let _ = self.client.flush().await;
-        Ok(())
     }
 
     async fn connect_backend(
@@ -308,7 +296,7 @@ impl Session {
         Ok(backend)
     }
 
-    async fn login_success_backend(&mut self, backend: &mut Connection) -> anyhow::Result<()> {
+    async fn login_success_backend(&mut self, backend: &mut Connection) -> anyhow::Result<RawPacket> {
         loop {
             let packet = backend.read_packet().await?;
             match packet.id {
@@ -320,7 +308,7 @@ impl Session {
                     anyhow::bail!("backend requested encryption on internal proxy link");
                 }
                 0x02 => {
-                    break;
+                    return Ok(packet);
                 }
                 0x03 => {
                     let comp: SetCompression = packet.deserialize()?;
@@ -358,14 +346,19 @@ impl Session {
                 _ => {}
             }
         }
-        Ok(())
     }
 
     async fn send_chat_message(&mut self, message: &str) -> anyhow::Result<()> {
         let packet_id = system_chat_packet_id(self.protocol_version);
+        let content = if self.protocol_version >= 765 {
+            message.to_string()
+        } else {
+            make_chat_json(message)
+        };
         let chat = SystemChatPacket {
-            content: make_chat_json(message),
+            content,
             overlay: false,
+            protocol_version: self.protocol_version,
         };
         self.client.write(packet_id, &chat).await?;
         self.client.flush().await?;
@@ -384,14 +377,14 @@ impl Session {
                 client_res = self.client.read_packet() => {
                     let packet = client_res?;
 
-                    if let Some(tab_resp) = handle_tab_complete(&packet, &server_names) {
+                    if let Some(tab_resp) = handle_tab_complete(&packet, &server_names, self.protocol_version) {
                         let packet_id = command_suggestions_packet_id(self.protocol_version);
                         let _ = self.client.write(packet_id, &tab_resp).await;
                         let _ = self.client.flush().await;
                         continue;
                     }
 
-                    if let Some(cmd) = extract_proxy_command(&packet) {
+                    if let Some(cmd) = extract_proxy_command(&packet, self.protocol_version) {
                         match cmd {
                             ProxyCommand::Server(None) => {
                                 let mut list: Vec<&str> = self.config.servers.keys().map(|s| s.as_str()).collect();
@@ -417,11 +410,10 @@ impl Session {
                                 match self.connect_backend(&target, client_handshake).await {
                                     Ok(mut new_backend) => {
                                         match self.login_success_backend(&mut new_backend).await {
-                                            Ok(()) => {
+                                            Ok(_) => {
                                                 *backend = new_backend;
                                                 self.current_server = target.clone();
                                                 let _ = self.send_chat_message(&format!("§aSuccessfully connected to '{}'!", target)).await;
-                                                let _ = self.send_tablist_header_footer().await;
                                                 continue;
                                             }
                                             Err(err) => {
@@ -443,7 +435,7 @@ impl Session {
                                 continue;
                             }
                             ProxyCommand::Noncity => {
-                                let msg = "§bNoncity §7v0.1.0 - High performance Rust Minecraft proxy (tokio core)";
+                                let msg = "§bNoncity §7v0.1.0";
                                 let _ = self.send_chat_message(msg).await;
                                 continue;
                             }

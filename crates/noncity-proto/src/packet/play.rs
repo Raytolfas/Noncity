@@ -7,6 +7,7 @@ use bytes::{Buf, BufMut};
 pub struct SystemChatPacket {
     pub content: String,
     pub overlay: bool,
+    pub protocol_version: i32,
 }
 
 impl PacketRead for SystemChatPacket {
@@ -17,13 +18,23 @@ impl PacketRead for SystemChatPacket {
         } else {
             false
         };
-        Ok(Self { content, overlay })
+        Ok(Self {
+            content,
+            overlay,
+            protocol_version: 0,
+        })
     }
 }
 
 impl PacketWrite for SystemChatPacket {
     fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
-        write_string(buf, &self.content);
+        if self.protocol_version >= 765 {
+            buf.put_u8(0x08);
+            buf.put_u16(self.content.len() as u16);
+            buf.put_slice(self.content.as_bytes());
+        } else {
+            write_string(buf, &self.content);
+        }
         buf.put_u8(if self.overlay { 1 } else { 0 });
         Ok(())
     }
@@ -33,20 +44,34 @@ impl PacketWrite for SystemChatPacket {
 pub struct TabListHeaderFooter {
     pub header: String,
     pub footer: String,
+    pub protocol_version: i32,
 }
 
 impl PacketRead for TabListHeaderFooter {
     fn read(buf: &mut impl Buf) -> Result<Self, ProtoError> {
         let header = read_string(buf, 262144)?;
         let footer = read_string(buf, 262144)?;
-        Ok(Self { header, footer })
+        Ok(Self {
+            header,
+            footer,
+            protocol_version: 0,
+        })
     }
 }
 
 impl PacketWrite for TabListHeaderFooter {
     fn write(&self, buf: &mut impl BufMut) -> Result<(), ProtoError> {
-        write_string(buf, &self.header);
-        write_string(buf, &self.footer);
+        if self.protocol_version >= 765 {
+            buf.put_u8(0x08);
+            buf.put_u16(self.header.len() as u16);
+            buf.put_slice(self.header.as_bytes());
+            buf.put_u8(0x08);
+            buf.put_u16(self.footer.len() as u16);
+            buf.put_slice(self.footer.as_bytes());
+        } else {
+            write_string(buf, &self.header);
+            write_string(buf, &self.footer);
+        }
         Ok(())
     }
 }
@@ -85,7 +110,15 @@ impl PacketWrite for CommandSuggestionsResponse {
 }
 
 pub fn system_chat_packet_id(protocol_version: i32) -> i32 {
-    if protocol_version >= 766 {
+    if protocol_version >= 777 {
+        0x7C
+    } else if protocol_version >= 769 {
+        0x73
+    } else if protocol_version >= 768 {
+        0x72
+    } else if protocol_version >= 767 {
+        0x6C
+    } else if protocol_version >= 766 {
         0x6B
     } else if protocol_version >= 764 {
         0x69
@@ -101,7 +134,9 @@ pub fn system_chat_packet_id(protocol_version: i32) -> i32 {
 }
 
 pub fn tablist_packet_id(protocol_version: i32) -> i32 {
-    if protocol_version >= 766 {
+    if protocol_version >= 777 {
+        0x7D
+    } else if protocol_version >= 766 {
         0x6E
     } else if protocol_version >= 764 {
         0x6C
@@ -117,7 +152,9 @@ pub fn tablist_packet_id(protocol_version: i32) -> i32 {
 }
 
 pub fn command_suggestions_packet_id(protocol_version: i32) -> i32 {
-    if protocol_version >= 766 {
+    if protocol_version >= 777 {
+        0x0F
+    } else if protocol_version >= 766 {
         0x11
     } else if protocol_version >= 764 {
         0x10

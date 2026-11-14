@@ -12,6 +12,7 @@ pub enum ForwardingMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     pub bind: SocketAddr,
     pub motd: String,
@@ -36,7 +37,7 @@ impl Default for Config {
 
         Self {
             bind: "0.0.0.0:25565".parse().unwrap(),
-            motd: "§bNoncity §7- High performance Minecraft proxy".to_string(),
+            motd: "§bNoncity §7- High performance Rust Minecraft proxy".to_string(),
             max_players: 1000,
             online_mode: false,
             compression_threshold: 256,
@@ -44,7 +45,7 @@ impl Default for Config {
             forwarding_mode: ForwardingMode::Velocity,
             forwarding_secret: "change_me_to_a_secure_random_secret".to_string(),
             tablist_header: "§b§lNONCITY PROXY\n§7play.example.com".to_string(),
-            tablist_footer: "\n§7High Performance Minecraft Proxy (Tokio Core)".to_string(),
+            tablist_footer: String::new(),
             rate_limit_burst: 20.0,
             rate_limit_refill: 5.0,
             max_connections_per_ip: 5,

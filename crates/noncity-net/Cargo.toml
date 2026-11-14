@@ -2,6 +2,9 @@
 name = "noncity-net"
 version = "0.1.0"
 edition = "2021"
+description = "Network layer for Noncity"
+repository = "https://github.com/Raytolfas/Noncity"
+license = "Apache-2.0"
 
 [dependencies]
 noncity-proto = { path = "../noncity-proto" }
