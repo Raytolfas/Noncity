@@ -1,6 +1,6 @@
 <div align="center">
 
-# Noncity
+<img src="https://github.com/MIXITOSIK/MIXITOSIK/blob/main/other_assets/banner-noncity.png?raw=true" alt="RMC Shaders Image Banner" width="512">
 
 **Noncity - High performance Rust Minecraft proxy**
 
