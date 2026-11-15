@@ -63,6 +63,7 @@ bind_address = "0.0.0.0:25565"
 motd = "§bNoncity §7- Modern Rust Minecraft Proxy"
 max_players = 1000
 online_mode = false
+cross-version = true
 compression_threshold = 256
 forwarding_mode = "velocity"
 velocity_secret = "your_secret_here"

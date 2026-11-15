@@ -107,9 +107,15 @@ impl Session {
         }
         let _req: StatusRequest = raw.deserialize()?;
 
+        let version_name = if self.config.cross_version {
+            "Noncity 1.7.x - 1.26.x".to_string()
+        } else {
+            "Noncity".to_string()
+        };
+
         let status = ServerStatus {
             version: StatusVersion {
-                name: "Noncity".to_string(),
+                name: version_name,
                 protocol: self.protocol_version,
             },
             players: StatusPlayers {
@@ -141,6 +147,24 @@ impl Session {
     }
 
     async fn handle_login(&mut self, client_handshake: HandshakePacket) -> anyhow::Result<()> {
+        if self.config.cross_version {
+            if self.protocol_version < 4 {
+                let disconnect = LoginDisconnect {
+                    reason: r#"{"text":"§cOutdated client! Noncity supports Minecraft 1.7.2 through 1.26.x"}"#.to_string(),
+                };
+                let _ = self.client.write(0x00, &disconnect).await;
+                let _ = self.client.flush().await;
+                anyhow::bail!("client protocol {} is below minimum supported 1.7.2", self.protocol_version);
+            }
+        } else if self.protocol_version < 764 {
+            let disconnect = LoginDisconnect {
+                reason: r#"{"text":"§cCross-version mode is disabled. Please connect using Minecraft 1.20.2 - 1.26.x"}"#.to_string(),
+            };
+            let _ = self.client.write(0x00, &disconnect).await;
+            let _ = self.client.flush().await;
+            anyhow::bail!("client protocol {} rejected (cross-version disabled)", self.protocol_version);
+        }
+
         let raw_login_start = self.client.read_packet().await?;
         if raw_login_start.id != 0x00 {
             anyhow::bail!("expected login start (0x00), got {:#x}", raw_login_start.id);

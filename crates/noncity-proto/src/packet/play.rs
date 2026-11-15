@@ -128,8 +128,16 @@ pub fn system_chat_packet_id(protocol_version: i32) -> i32 {
         0x60
     } else if protocol_version >= 759 {
         0x5F
-    } else {
+    } else if protocol_version >= 755 {
         0x0F
+    } else if protocol_version >= 735 {
+        0x0E
+    } else if protocol_version >= 573 {
+        0x0F
+    } else if protocol_version >= 393 {
+        0x0E
+    } else {
+        0x02
     }
 }
 

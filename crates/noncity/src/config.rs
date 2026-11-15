@@ -27,6 +27,8 @@ pub struct Config {
     pub rate_limit_burst: f64,
     pub rate_limit_refill: f64,
     pub max_connections_per_ip: usize,
+    #[serde(rename = "cross-version")]
+    pub cross_version: bool,
     pub servers: HashMap<String, SocketAddr>,
 }
 
@@ -49,6 +51,7 @@ impl Default for Config {
             rate_limit_burst: 20.0,
             rate_limit_refill: 5.0,
             max_connections_per_ip: 5,
+            cross_version: true,
             servers,
         }
     }
