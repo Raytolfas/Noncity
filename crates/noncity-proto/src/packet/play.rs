@@ -172,3 +172,82 @@ pub fn command_suggestions_packet_id(protocol_version: i32) -> i32 {
         0x0E
     }
 }
+
+pub fn translate_clientbound_id(id: i32, from_proto: i32, to_proto: i32) -> i32 {
+    if from_proto == to_proto {
+        return id;
+    }
+
+    if from_proto >= 777 && to_proto < 777 {
+        match id {
+            0x7C => system_chat_packet_id(to_proto),
+            0x7D => tablist_packet_id(to_proto),
+            0x0F => command_suggestions_packet_id(to_proto),
+            0x2B => {
+                if to_proto >= 766 {
+                    0x26
+                } else if to_proto >= 764 {
+                    0x24
+                } else if to_proto >= 763 {
+                    0x23
+                } else if to_proto >= 759 {
+                    0x21
+                } else {
+                    0x1F
+                }
+            }
+            0x1F => {
+                if to_proto >= 766 {
+                    0x1D
+                } else if to_proto >= 764 {
+                    0x1B
+                } else if to_proto >= 763 {
+                    0x1A
+                } else {
+                    0x19
+                }
+            }
+            0x32 => {
+                if to_proto >= 766 {
+                    0x2B
+                } else if to_proto >= 764 {
+                    0x29
+                } else if to_proto >= 763 {
+                    0x28
+                } else if to_proto >= 759 {
+                    0x26
+                } else {
+                    0x24
+                }
+            }
+            _ => id,
+        }
+    } else if from_proto < 777 && to_proto >= 777 {
+        if id == system_chat_packet_id(from_proto) {
+            0x7C
+        } else if id == tablist_packet_id(from_proto) {
+            0x7D
+        } else if id == command_suggestions_packet_id(from_proto) {
+            0x0F
+        } else {
+            id
+        }
+    } else {
+        id
+    }
+}
+
+pub fn translate_serverbound_id(id: i32, from_proto: i32, to_proto: i32) -> i32 {
+    if from_proto == to_proto {
+        return id;
+    }
+
+    if from_proto < 777 && to_proto >= 777 {
+        match id {
+            0x18 => 0x18,
+            _ => id,
+        }
+    } else {
+        id
+    }
+}

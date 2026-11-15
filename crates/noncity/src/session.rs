@@ -5,12 +5,14 @@ use crate::forwarding::{create_velocity_forwarding_data, VELOCITY_FORWARDING_CHA
 use crate::plugin::PluginManager;
 use noncity_net::{Connection, RawPacket};
 use noncity_proto::packet::handshake::{HandshakeNextState, HandshakePacket};
+use bytes::Bytes;
 use noncity_proto::packet::login::{
     EncryptionRequest, EncryptionResponse, LoginDisconnect, LoginPluginRequest,
-    LoginPluginResponse, LoginStart, SetCompression,
+    LoginPluginResponse, LoginStart, LoginSuccess, SetCompression,
 };
 use noncity_proto::packet::play::{
-    command_suggestions_packet_id, system_chat_packet_id, SystemChatPacket,
+    command_suggestions_packet_id, system_chat_packet_id, translate_clientbound_id,
+    translate_serverbound_id, SystemChatPacket,
 };
 use noncity_proto::packet::status::{
     PingPacket, ServerStatus, StatusDescription, StatusPlayers, StatusRequest, StatusResponse,
@@ -266,13 +268,41 @@ impl Session {
         let login_success_pkt = self.login_success_backend(&mut backend).await?;
         self.current_server = default_target;
 
-        self.client.write_packet(login_success_pkt).await?;
+        if self.protocol_version < 776 {
+            let client_login_success = LoginSuccess {
+                uuid: self.player_uuid,
+                username: self.player_name.clone(),
+            };
+            self.client.write(0x02, &client_login_success).await?;
+        } else {
+            self.client.write_packet(login_success_pkt).await?;
+        }
         self.client.flush().await?;
 
         if self.protocol_version >= 764 {
             let ack = self.client.read_packet().await?;
             backend.write_packet(ack).await?;
             backend.flush().await?;
+        } else {
+            let ack = RawPacket {
+                id: 0x03,
+                payload: Bytes::new(),
+            };
+            backend.write_packet(ack).await?;
+            backend.flush().await?;
+
+            loop {
+                let pkt = backend.read_packet().await?;
+                if pkt.id == 0x03 {
+                    let client_ack = RawPacket {
+                        id: 0x03,
+                        payload: Bytes::new(),
+                    };
+                    backend.write_packet(client_ack).await?;
+                    backend.flush().await?;
+                    break;
+                }
+            }
         }
 
         self.online_players.fetch_add(1, Ordering::Relaxed);
@@ -300,6 +330,9 @@ impl Session {
         let mut backend = Connection::new(stream, backend_addr);
 
         let mut backend_handshake = client_handshake.clone();
+        if self.config.cross_version {
+            backend_handshake.protocol_version = VarInt(self.config.backend_protocol);
+        }
         if self.config.forwarding_mode == ForwardingMode::Legacy {
             backend_handshake.server_address = format!(
                 "{}\0{}\0{}",
@@ -472,11 +505,18 @@ impl Session {
                         }
                     }
 
+                    let mut packet = packet;
+                    if self.config.cross_version && self.protocol_version != self.config.backend_protocol {
+                        packet.id = translate_serverbound_id(packet.id, self.protocol_version, self.config.backend_protocol);
+                    }
                     backend.write_packet(packet).await?;
                     backend.flush().await?;
                 }
                 backend_res = backend.read_packet() => {
-                    let packet = backend_res?;
+                    let mut packet = backend_res?;
+                    if self.config.cross_version && self.protocol_version != self.config.backend_protocol {
+                        packet.id = translate_clientbound_id(packet.id, self.config.backend_protocol, self.protocol_version);
+                    }
                     self.client.write_packet(packet).await?;
                     self.client.flush().await?;
                 }

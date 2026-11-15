@@ -29,7 +29,13 @@ pub struct Config {
     pub max_connections_per_ip: usize,
     #[serde(rename = "cross-version")]
     pub cross_version: bool,
+    #[serde(default = "default_backend_protocol")]
+    pub backend_protocol: i32,
     pub servers: HashMap<String, SocketAddr>,
+}
+
+fn default_backend_protocol() -> i32 {
+    777
 }
 
 impl Default for Config {
@@ -52,6 +58,7 @@ impl Default for Config {
             rate_limit_refill: 5.0,
             max_connections_per_ip: 5,
             cross_version: true,
+            backend_protocol: 777,
             servers,
         }
     }
